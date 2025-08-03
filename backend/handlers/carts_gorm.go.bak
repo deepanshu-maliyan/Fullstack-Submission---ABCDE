@@ -1,0 +1,106 @@
+package handlers
+
+import (
+	"ecommerce-backend/database"
+	"ecommerce-backend/models"
+	"net/http"
+	"strconv"
+	"github.com/gin-gonic/gin"
+)
+
+type AddToCartRequest struct {
+	ItemID uint `json:"item_id" binding:"required"`
+}
+
+func AddToCart(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	var req AddToCartRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Get user's cart
+	var cart models.Cart
+	if err := database.DB.Where("user_id = ? AND status = ?", userID, "active").First(&cart).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Cart not found"})
+		return
+	}
+
+	// Check if item exists
+	var item models.Item
+	if err := database.DB.First(&item, req.ItemID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Item not found"})
+		return
+	}
+
+	// Check if item already in cart
+	var existingCartItem models.CartItem
+	if err := database.DB.Where("cart_id = ? AND item_id = ?", cart.ID, req.ItemID).First(&existingCartItem).Error; err == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "Item already in cart"})
+		return
+	}
+
+	// Add item to cart
+	cartItem := models.CartItem{
+		CartID: cart.ID,
+		ItemID: req.ItemID,
+	}
+
+	if err := database.DB.Create(&cartItem).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add item to cart"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"message": "Item added to cart successfully"})
+}
+
+func GetCarts(c *gin.Context) {
+	var carts []models.Cart
+	if err := database.DB.Preload("CartItems.Item").Find(&carts).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch carts"})
+		return
+	}
+
+	c.JSON(http.StatusOK, carts)
+}
+
+func GetUserCart(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	var cart models.Cart
+	if err := database.DB.Where("user_id = ? AND status = ?", userID, "active").
+		Preload("CartItems.Item").First(&cart).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Cart not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, cart)
+}
+
+func GetCartByID(c *gin.Context) {
+	cartIDStr := c.Param("id")
+	cartID, err := strconv.ParseUint(cartIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid cart ID"})
+		return
+	}
+
+	var cart models.Cart
+	if err := database.DB.Where("id = ?", cartID).
+		Preload("CartItems.Item").First(&cart).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Cart not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, cart)
+}

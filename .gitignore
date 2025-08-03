@@ -1,0 +1,27 @@
+# Go backend
+/backend/ecommerce-backend.exe
+/backend/*.exe
+/backend/*.test
+/backend/*.out
+
+# Node.js frontend
+/frontend/node_modules
+/frontend/build
+/frontend/.pnp
+/frontend/.pnp.js
+/frontend/coverage
+
+# Backup files
+*.bak
+
+# Misc
+.DS_Store
+Thumbs.db
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

@@ -1,0 +1,47 @@
+package handlers
+
+import (
+	"ecommerce-backend/database"
+	"ecommerce-backend/models"
+	"net/http"
+	"github.com/gin-gonic/gin"
+)
+
+func GetItems(c *gin.Context) {
+	var items []models.Item
+	if err := database.DB.Where("status = ?", "active").Find(&items).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch items"})
+		return
+	}
+
+	c.JSON(http.StatusOK, items)
+}
+
+type ItemRequest struct {
+	Name   string `json:"name" binding:"required"`
+	Status string `json:"status"`
+}
+
+func CreateItem(c *gin.Context) {
+	var req ItemRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if req.Status == "" {
+		req.Status = "active"
+	}
+
+	item := models.Item{
+		Name:   req.Name,
+		Status: req.Status,
+	}
+
+	if err := database.DB.Create(&item).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create item"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, item)
+}

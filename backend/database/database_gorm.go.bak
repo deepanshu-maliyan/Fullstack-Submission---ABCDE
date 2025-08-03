@@ -1,0 +1,50 @@
+package database
+
+import (
+	"ecommerce-backend/models"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	"log"
+)
+
+var DB *gorm.DB
+
+func Connect() {
+	var err error
+	DB, err = gorm.Open(sqlite.Open("ecommerce.db"), &gorm.Config{})
+	if err != nil {
+		log.Fatal("Failed to connect to database:", err)
+	}
+
+	// Auto-migrate the schema
+	err = DB.AutoMigrate(&models.User{}, &models.Item{}, &models.Cart{}, &models.CartItem{}, &models.Order{})
+	if err != nil {
+		log.Fatal("Failed to migrate database:", err)
+	}
+
+	// Seed some initial items
+	seedItems()
+}
+
+func seedItems() {
+	var count int64
+	DB.Model(&models.Item{}).Count(&count)
+	
+	if count == 0 {
+		items := []models.Item{
+			{Name: "Laptop", Status: "active"},
+			{Name: "Smartphone", Status: "active"},
+			{Name: "Headphones", Status: "active"},
+			{Name: "Keyboard", Status: "active"},
+			{Name: "Mouse", Status: "active"},
+			{Name: "Monitor", Status: "active"},
+			{Name: "Tablet", Status: "active"},
+			{Name: "Webcam", Status: "active"},
+		}
+		
+		for _, item := range items {
+			DB.Create(&item)
+		}
+		log.Println("Seeded initial items")
+	}
+}

@@ -1,0 +1,85 @@
+package handlers
+
+import (
+	"ecommerce-backend/database"
+	"ecommerce-backend/models"
+	"net/http"
+	"github.com/gin-gonic/gin"
+)
+
+func CreateOrder(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	// Get user's active cart
+	var cart models.Cart
+	if err := database.DB.Where("user_id = ? AND status = ?", userID, "active").
+		Preload("CartItems").First(&cart).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "No active cart found"})
+		return
+	}
+
+	// Check if cart has items
+	if len(cart.CartItems) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cart is empty"})
+		return
+	}
+
+	// Create order
+	order := models.Order{
+		CartID: cart.ID,
+		UserID: cart.UserID,
+	}
+
+	if err := database.DB.Create(&order).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create order"})
+		return
+	}
+
+	// Mark cart as ordered and create a new cart for the user
+	cart.Status = "ordered"
+	database.DB.Save(&cart)
+
+	// Create new cart for user
+	newCart := models.Cart{
+		UserID: cart.UserID,
+		Name:   "Default Cart",
+		Status: "active",
+	}
+	database.DB.Create(&newCart)
+
+	// Update user's cart ID
+	database.DB.Model(&models.User{}).Where("id = ?", userID).Update("cart_id", newCart.ID)
+
+	c.JSON(http.StatusCreated, order)
+}
+
+func GetOrders(c *gin.Context) {
+	var orders []models.Order
+	if err := database.DB.Preload("Cart.CartItems.Item").Find(&orders).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch orders"})
+		return
+	}
+
+	c.JSON(http.StatusOK, orders)
+}
+
+func GetUserOrders(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	var orders []models.Order
+	if err := database.DB.Where("user_id = ?", userID).
+		Preload("Cart.CartItems.Item").Find(&orders).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch orders"})
+		return
+	}
+
+	c.JSON(http.StatusOK, orders)
+}
